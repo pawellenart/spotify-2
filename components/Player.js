@@ -122,11 +122,11 @@ const Player = () => {
           src={songInfo?.album.images?.[0]?.url}
           alt=""
         />
-        <div>
+        <div className="truncate">
           <h3>{songInfo?.name}</h3>
           <p>{songInfo?.artists?.[0]?.name}</p>
         </div>
-        <div>
+        <div className="hidden xl:inline">
           <HeartIcon className="button" />
         </div>
       </div>
@@ -152,17 +152,21 @@ const Player = () => {
           />
           <ReplayIcon className="button" />
         </div>
-        <div className="flex justify-center items-center space-x-3">
-          <p>{millisToMinutesAndSeconds(currentTrackProgressMs)}</p>
+        <div className="flex justify-center items-center space-x-3 text-sm">
+          <div className="w-8 text-left">
+            <p>{millisToMinutesAndSeconds(currentTrackProgressMs)}</p>
+          </div>
           <input
-            className="w-80"
+            className="w-36 md:w-40 lg:w-80"
             type="range"
             value={playbackPosition}
             min={0}
             max={currentTrackDurationMs / 1000}
             onChange={(e) => setPlaybackPosition(Number(e.target.value))}
           />
-          <p>{millisToMinutesAndSeconds(currentTrackDurationMs)}</p>
+          <div className="w-8 text-right">
+            <p>{millisToMinutesAndSeconds(currentTrackDurationMs)}</p>
+          </div>
         </div>
       </div>
 
