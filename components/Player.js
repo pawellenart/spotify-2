@@ -16,17 +16,28 @@ import { debounce } from 'lodash';
 import { useSession } from 'next-auth/react';
 import { useCallback, useEffect, useState } from 'react';
 import { useRecoilState } from 'recoil';
-import { currentTrackIdState, isPlayingState } from '../atoms/songAtom';
+import {
+  currentTrackDurationMsState,
+  currentTrackIdState,
+  isPlayingState,
+} from '../atoms/songAtom';
 import useSongInfo from '../hooks/useSongInfo';
 import useSpotify from '../hooks/useSpotify';
+import { millisToMinutesAndSeconds } from '../lib/time';
 
 const Player = () => {
   const spotifyApi = useSpotify();
   const { data: session, status } = useSession();
   const [currentTrackId, setCurrentTrackId] =
     useRecoilState(currentTrackIdState);
+  const [currentTrackDurationMs, setCurrentTrackDurationMs] = useRecoilState(
+    currentTrackDurationMsState
+  );
   const [isPlaying, setIsPlaying] = useRecoilState(isPlayingState);
   const [volume, setVolume] = useState(50);
+
+  const [currentTrackProgressMs, setCurrentTrackProgressMs] = useState(0);
+  const [playbackPosition, setPlaybackPosition] = useState(0);
 
   const songInfo = useSongInfo();
 
@@ -34,6 +45,7 @@ const Player = () => {
     if (!songInfo) {
       spotifyApi.getMyCurrentPlayingTrack().then((data) => {
         setCurrentTrackId(data.body?.item.id);
+        setCurrentTrackDurationMs(data.body?.item.duration_ms);
         spotifyApi.getMyCurrentPlaybackState().then((data) => {
           setIsPlaying(data.body?.is_playing);
         });
@@ -66,9 +78,37 @@ const Player = () => {
     }
   }, [volume]);
 
+  useEffect(() => {
+    debouncedSeek(playbackPosition * 1000);
+  }, [playbackPosition]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (isPlaying) {
+        spotifyApi.getMyCurrentPlaybackState().then((data) => {
+          setCurrentTrackProgressMs(data.body?.progress_ms);
+
+          if (!data.body?.is_playing) {
+            setIsPlaying(false);
+            setPlaybackPosition(0);
+          }
+        });
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [isPlaying]);
+
   const debouncedAdjustVolume = useCallback(
     debounce((volume) => {
       spotifyApi.setVolume(volume).catch((err) => {});
+    }, 500),
+    []
+  );
+
+  const debouncedSeek = useCallback(
+    debounce((position) => {
+      spotifyApi.seek(position).catch((err) => {});
     }, 500),
     []
   );
@@ -86,27 +126,44 @@ const Player = () => {
           <h3>{songInfo?.name}</h3>
           <p>{songInfo?.artists?.[0]?.name}</p>
         </div>
+        <div>
+          <HeartIcon className="button" />
+        </div>
       </div>
 
       {/* center */}
-      <div className="flex items-center justify-evenly">
-        <SwitchHorizontalIcon className="button" />
-        <RewindIcon
-          // TODO: check this, below API is not working
-          // onClick={() => spotifyApi.skipToPrevious()}
-          className="button"
-        />
-        {isPlaying ? (
-          <PauseIcon className="button w-10 h-10" onClick={handlePlayPause} />
-        ) : (
-          <PlayIcon className="button w-10 h-10" onClick={handlePlayPause} />
-        )}
-        <FastForwardIcon
-          // TODO: check this, below API is not working
-          // onClick={() => spotifyApi.skipToNext()}
-          className="button"
-        />
-        <ReplayIcon className="button" />
+      <div className="grid grid-rows-2">
+        <div className="flex items-center justify-center space-x-4">
+          <SwitchHorizontalIcon className="button" />
+          <RewindIcon
+            // TODO: check this, below API is not working
+            // onClick={() => spotifyApi.skipToPrevious()}
+            className="button"
+          />
+          {isPlaying ? (
+            <PauseIcon className="button w-10 h-10" onClick={handlePlayPause} />
+          ) : (
+            <PlayIcon className="button w-10 h-10" onClick={handlePlayPause} />
+          )}
+          <FastForwardIcon
+            // TODO: check this, below API is not working
+            // onClick={() => spotifyApi.skipToNext()}
+            className="button"
+          />
+          <ReplayIcon className="button" />
+        </div>
+        <div className="flex justify-center items-center space-x-3">
+          <p>{millisToMinutesAndSeconds(currentTrackProgressMs)}</p>
+          <input
+            className="w-80"
+            type="range"
+            value={playbackPosition}
+            min={0}
+            max={currentTrackDurationMs / 1000}
+            onChange={(e) => setPlaybackPosition(Number(e.target.value))}
+          />
+          <p>{millisToMinutesAndSeconds(currentTrackDurationMs)}</p>
+        </div>
       </div>
 
       {/* right */}
